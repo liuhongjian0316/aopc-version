@@ -2,12 +2,13 @@
   "name": "aopc-version",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "AOPC 桌面客户端更新发布工作区：一键构建 + 发布到 GitHub Releases",
   "scripts": {
-    "build": "pnpm -C ../AOPC/packages/desktop run build && pnpm -C ../AOPC/packages/desktop run bundle",
+    "build": "node build.mjs",
     "publish": "bash publish-update.sh",
     "publish:version": "bash publish-update.sh",
-    "release": "npm run build && npm run publish",
+    "release": "node build.mjs && npm run publish",
     "check": "node check-update-consistency.js ../AOPC/config/client-configs.json ../AOPC/packages/desktop/dist"
   }
 }
