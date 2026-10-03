@@ -1,0 +1,11 @@
+# 发布产物不入 git（走 Releases 资产）
+dist/
+*.blockmap
+*.dmg
+*.exe
+*.AppImage
+*.zip
+latest-*.yml
+
+# 本机配置
+.DS_Store
