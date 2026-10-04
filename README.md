@@ -25,7 +25,6 @@ npm run release NOTES=…  # 等价于 publish 时带说明，见下
 ```bash
 npm run build     # 构建 AOPC 桌面正式包（AOPC_ENV=production，feed 已烘焙）
 npm run publish   # 校验 dist 产物并发布到 GitHub Releases
-npm run check     # 校验 dist 版本与 forceUpdate 门槛的一致性（semver 比较）
 ./publish-update.sh --dry-run   # 只做发布前校验，不上传
 ```
 
@@ -48,5 +47,4 @@ npm run check     # 校验 dist 版本与 forceUpdate 门槛的一致性（semve
 - 上传清单以 `latest-*.yml` 引用为准（安装包 + blockmap + manifest）；dist 里未被 manifest 引用的安装产物（旧版本/测试构建残留）会直接拒绝发布——bundle 不会清理 dist，重新构建前先清掉旧产物；
 - 安装包超过 100MB 不能进 git，必须走 Releases 资产（上限 2GB）；
 - **默认（test）构建产出 `AOPC Preview-…-TEST` 包，不能用于发布**；`npm run build` 已强制 `AOPC_ENV=production`，脚本发现 `_TEST` 产物会告警；
-- 强制升级门槛由 AOPC 项目 `config/client-configs.json` 的 `forceUpdate.minimalVersion` 控制（本地文件，手动编辑），`npm run check` 与 `publish-update.sh` 都会按 semver 校验 dist 版本不低于门槛；
 - 版本号以 `latest-*.yml` 里的 `version`（即 AOPC 根 package.json 的 version）为准；给 `publish-update.sh` 传自定义版本只改 Release tag，客户端仍按 manifest 版本判断更新。

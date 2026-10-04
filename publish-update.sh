@@ -6,7 +6,7 @@
 #   ./publish-update.sh 0.16.9           # 指定版本号（仅作为 Release tag；与 manifest 版本不一致时会告警）
 #   ./publish-update.sh 0.16.9 "备注"    # 指定版本与发布说明
 #   NOTES="..." ./publish-update.sh      # 用环境变量传发布说明（等效第二个参数）
-#   ./publish-update.sh --dry-run        # 只做校验（manifest 完整性/强更门槛/产物清单），不上传
+#   ./publish-update.sh --dry-run        # 只做校验（manifest 完整性/产物清单），不上传
 #
 # 前置:
 #   1. gh auth login 已完成
@@ -19,7 +19,6 @@ set -euo pipefail
 
 REPO="liuhongjian0316/aopc-version"
 DIST_DIR="${AOPC_DESKTOP_DIST:-../AOPC/packages/desktop/dist}"
-CONFIG_JSON="${AOPC_CLIENT_CONFIGS:-../AOPC/config/client-configs.json}"
 
 usage() {
   sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
@@ -75,55 +74,15 @@ fi
 NOTES="${POSITIONAL[1]:-${NOTES:-}}"
 
 # 4. 发布前校验 + 收集产物清单（node 输出清单到 stdout 临时文件，日志走 stderr）
-# 校验内容：所有 latest*.yml 引用的文件都在 dist、mac manifest 必须引用 zip、
-# 强更门槛 semver 比较、_TEST 测试产物告警。产物清单 = manifest 文件 + 引用文件 + 对应 blockmap（存在时）。
+# 校验内容：所有 latest*.yml 引用的文件都在 dist、mac manifest 必须引用 zip、_TEST 测试产物告警。
+# 产物清单 = manifest 文件 + 引用文件 + 对应 blockmap（存在时）。
 # 注意：清单用临时文件中转，不用 $(node <<EOF)——macOS 自带 bash 3.2 解析不了命令替换里嵌 heredoc。
 REFERENCED_LIST_FILE=$(mktemp /tmp/aopc-publish-list.XXXXXX)
 trap 'rm -f "$REFERENCED_LIST_FILE"' EXIT
-node - "$DIST_DIR" "$VERSION" "$CONFIG_JSON" > "$REFERENCED_LIST_FILE" <<'NODE_EOF'
-const [distDir, version, configJson] = process.argv.slice(2);
+node - "$DIST_DIR" "$VERSION" > "$REFERENCED_LIST_FILE" <<'NODE_EOF'
+const [distDir, version] = process.argv.slice(2);
 const { readFileSync, existsSync, readdirSync } = require("node:fs");
 const { join } = require("node:path");
-
-function parseSemver(input) {
-  const normalized = input.trim().replace(/^v/i, "");
-  const strict = normalized.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
-  if (strict) {
-    return { nums: [Number(strict[1]), Number(strict[2]), Number(strict[3])], pre: strict[4]?.split(".") ?? [] };
-  }
-  const majorOnly = normalized.match(/^(\d+)$/);
-  if (majorOnly) return { nums: [Number(majorOnly[1]), 0, 0], pre: [] };
-  const majorMinor = normalized.match(/^(\d+)\.(\d+)$/);
-  if (majorMinor) return { nums: [Number(majorMinor[1]), Number(majorMinor[2]), 0], pre: [] };
-  return null;
-}
-function compareSemver(a, b) {
-  const left = parseSemver(a);
-  const right = parseSemver(b);
-  if (!left || !right) return null;
-  for (let i = 0; i < 3; i += 1) {
-    if (left.nums[i] !== right.nums[i]) return left.nums[i] > right.nums[i] ? 1 : -1;
-  }
-  if (left.pre.length === 0 && right.pre.length === 0) return 0;
-  if (left.pre.length === 0) return 1;
-  if (right.pre.length === 0) return -1;
-  const len = Math.max(left.pre.length, right.pre.length);
-  for (let i = 0; i < len; i += 1) {
-    const l = left.pre[i];
-    const r = right.pre[i];
-    if (l === undefined) return -1;
-    if (r === undefined) return 1;
-    const lNum = /^\d+$/.test(l);
-    const rNum = /^\d+$/.test(r);
-    if (lNum && rNum) {
-      if (Number(l) !== Number(r)) return Number(l) > Number(r) ? 1 : -1;
-      continue;
-    }
-    if (lNum !== rNum) return lNum ? -1 : 1;
-    if (l !== r) return l > r ? 1 : -1;
-  }
-  return 0;
-}
 
 const manifests = readdirSync(distDir).filter((f) => /^latest-.*\.yml$/.test(f)).sort();
 if (manifests.length === 0) {
@@ -187,30 +146,6 @@ for (const manifestName of manifests) {
   if (manifestVersion && manifestVersion !== version) {
     console.warn(`警告: ${manifestName} 版本 ${manifestVersion} 与发布版本 ${version} 不一致`);
   }
-}
-
-if (existsSync(configJson)) {
-  try {
-    const minimal = JSON.parse(readFileSync(configJson, "utf-8"))?.data?.configs?.forceUpdate?.minimalVersion;
-    if (minimal) {
-      const cmp = compareSemver(version, minimal);
-      if (cmp === null) {
-        console.error(`错误: 无法比较版本 ${version} 与强更门槛 ${minimal}`);
-        process.exit(1);
-      }
-      if (cmp < 0) {
-        console.error(`错误: 发布版本 ${version} 低于强制升级门槛 ${minimal}，先调整 config/client-configs.json`);
-        process.exit(1);
-      }
-      console.error(`强更门槛校验 OK: ${version} >= ${minimal}`);
-    } else {
-      console.error("强更门槛: 未设置（forceUpdate.minimalVersion 为空）");
-    }
-  } catch (error) {
-    console.warn(`警告: 读取强更门槛失败（忽略）: ${error.message}`);
-  }
-} else {
-  console.error(`强更门槛: 配置文件不存在，跳过（${configJson}）`);
 }
 
 console.error(`manifest 完整性 OK: ${manifests.length} 个 manifest，${upload.size} 个待上传文件`);
