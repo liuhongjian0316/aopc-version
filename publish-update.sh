@@ -49,7 +49,7 @@ fi
 
 # 1. 定位主 manifest（mac 优先，其次 win/linux），版本号以它为准
 MANIFEST=""
-for f in latest-mac.yml latest.yml latest-linux.yml; do
+for f in latest-mac.yml latest.yml latest-linux.yml latest-linux-arm64.yml; do
   if [ -f "$DIST_DIR/$f" ]; then MANIFEST="$f"; break; fi
 done
 if [ -z "${MANIFEST:-}" ]; then
@@ -84,7 +84,7 @@ const [distDir, version] = process.argv.slice(2);
 const { readFileSync, existsSync, readdirSync } = require("node:fs");
 const { join } = require("node:path");
 
-const manifests = readdirSync(distDir).filter((f) => /^latest-.*\.yml$/.test(f)).sort();
+const manifests = readdirSync(distDir).filter((f) => /^latest.*\.yml$/.test(f)).sort();
 if (manifests.length === 0) {
   console.error("错误: dist 里没有 latest-*.yml（请先完成桌面打包）");
   process.exit(1);
